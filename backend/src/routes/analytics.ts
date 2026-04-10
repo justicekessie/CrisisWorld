@@ -4,6 +4,8 @@ import { pool } from "../db/pool.js";
 
 const timeseriesSchema = z.object({
   countryCode: z.string().length(2).optional(),
+  verificationStatus: z.enum(["pending", "verified", "rejected"]).optional(),
+  category: z.string().min(1).optional(),
   dateFrom: z.string().datetime().optional(),
   dateTo: z.string().datetime().optional()
 });
@@ -17,13 +19,23 @@ analyticsRouter.get("/timeseries", async (req, res, next) => {
       return res.status(400).json({ error: "Invalid query parameters", details: parsed.error.flatten() });
     }
 
-    const { countryCode, dateFrom, dateTo } = parsed.data;
+    const { countryCode, verificationStatus, category, dateFrom, dateTo } = parsed.data;
     const values: string[] = [];
     const where: string[] = [];
 
     if (countryCode) {
       values.push(countryCode.toUpperCase());
       where.push(`country_code = $${values.length}`);
+    }
+
+    if (verificationStatus) {
+      values.push(verificationStatus);
+      where.push(`verification_status = $${values.length}`);
+    }
+
+    if (category) {
+      values.push(category);
+      where.push(`incident_category = $${values.length}`);
     }
 
     if (dateFrom) {

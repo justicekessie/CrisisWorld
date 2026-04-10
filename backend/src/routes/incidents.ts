@@ -94,7 +94,8 @@ incidentsRouter.get("/:id", async (req, res, next) => {
         i.*,
         ST_Y(i.location::geometry) AS latitude,
         ST_X(i.location::geometry) AS longitude,
-        g.name AS suspected_group_name
+        g.name AS suspected_group_name,
+        (SELECT COUNT(*)::int FROM incident_sources isrc WHERE isrc.incident_id = i.id) AS source_count
       FROM incidents i
       LEFT JOIN groups g ON g.id = i.suspected_group_id
       WHERE i.id = $1
