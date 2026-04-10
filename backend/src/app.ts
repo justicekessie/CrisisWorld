@@ -8,7 +8,8 @@ import { authContextMiddleware } from "./middleware/auth.js";
 export function createApp() {
   const app = express();
 
-  app.use(cors());
+  const corsOrigin = process.env.CORS_ORIGIN;
+  app.use(cors(corsOrigin ? { origin: corsOrigin } : {}));
   app.use(express.json({ limit: "1mb" }));
   app.use(authContextMiddleware);
 
@@ -301,6 +302,9 @@ export function createApp() {
           <select id="countryFilter">
             <option value="">All Countries</option>
           </select>
+          <select id="categoryFilter">
+            <option value="">All Categories</option>
+          </select>
           <select id="statusFilter">
             <option value="">All Status</option>
             <option value="pending">Pending</option>
@@ -402,6 +406,10 @@ export function createApp() {
         return new Date(ts).toISOString().slice(0, 10);
       }
 
+      function esc(str) {
+        return String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      }
+
       async function getJson(url, options = {}) {
         const response = await fetch(url, options);
         if (!response.ok) {
@@ -446,16 +454,16 @@ export function createApp() {
         }
 
         root.innerHTML =
-          '<h3>' + incident.title + '</h3>' +
-          '<p>' + (incident.country_name || 'Unknown') + ' | ' + (incident.city_name || 'n/a') + '</p>' +
-          '<p>' + (incident.incident_category || 'uncategorized') + '</p>' +
-          '<p>' + new Date(incident.occurred_at).toLocaleString() + '</p>' +
+          '<h3>' + esc(incident.title) + '</h3>' +
+          '<p>' + esc(incident.country_name || 'Unknown') + ' | ' + esc(incident.city_name || 'n/a') + '</p>' +
+          '<p>' + esc(incident.incident_category || 'uncategorized') + '</p>' +
+          '<p>' + esc(new Date(incident.occurred_at).toLocaleString()) + '</p>' +
           '<div class="row">' +
             '<div class="cell"><strong>Killed</strong><br />' + Number(incident.killed_count || 0) + '</div>' +
             '<div class="cell"><strong>Injured</strong><br />' + Number(incident.injured_count || 0) + '</div>' +
           '</div>' +
           '<div class="row">' +
-            '<div class="cell"><strong>Status</strong><br />' + (incident.verification_status || 'pending') + '</div>' +
+            '<div class="cell"><strong>Status</strong><br />' + esc(incident.verification_status || 'pending') + '</div>' +
             '<div class="cell"><strong>Coords</strong><br />' + Number(incident.latitude).toFixed(3) + ', ' + Number(incident.longitude).toFixed(3) + '</div>' +
           '</div>';
       }
@@ -486,10 +494,10 @@ export function createApp() {
           });
 
           marker.bindPopup(
-            "<strong>" + incident.title + "</strong><br/>" +
-              incident.country_name + " | " + (incident.city_name || "n/a") + "<br/>" +
-              "Killed: " + incident.killed_count + " | Injured: " + incident.injured_count + "<br/>" +
-              "Status: " + incident.verification_status
+            "<strong>" + esc(incident.title) + "</strong><br/>" +
+              esc(incident.country_name) + " | " + esc(incident.city_name || "n/a") + "<br/>" +
+              "Killed: " + Number(incident.killed_count || 0) + " | Injured: " + Number(incident.injured_count || 0) + "<br/>" +
+              "Status: " + esc(incident.verification_status)
           );
           marker.on("click", () => {
             state.selectedIncidentId = incident.id;
@@ -538,7 +546,7 @@ export function createApp() {
           .slice(0, 6)
           .map((c) =>
             '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #d6e3de;">' +
-              '<span>' + c.country_name + '</span><strong>' + c.incident_count + '</strong>' +
+              '<span>' + esc(c.country_name) + '</span><strong>' + Number(c.incident_count) + '</strong>' +
             '</div>'
           )
           .join("");
@@ -562,11 +570,12 @@ export function createApp() {
           return;
         }
         root.innerHTML = incidents.slice(0, 20).map((item) => {
+          const status = esc(item.verification_status);
           return '<article class="incident">' +
-            '<h3>' + item.title + '</h3>' +
-            '<div class="meta">' + item.country_name + ' | ' + (item.city_name || 'n/a') + '</div>' +
-            '<div class="meta">Killed ' + item.killed_count + ' | Injured ' + item.injured_count + '</div>' +
-            '<span class="chip ' + item.verification_status + '">' + item.verification_status + '</span>' +
+            '<h3>' + esc(item.title) + '</h3>' +
+            '<div class="meta">' + esc(item.country_name) + ' | ' + esc(item.city_name || 'n/a') + '</div>' +
+            '<div class="meta">Killed ' + Number(item.killed_count || 0) + ' | Injured ' + Number(item.injured_count || 0) + '</div>' +
+            '<span class="chip ' + status + '">' + status + '</span>' +
           '</article>';
         }).join('');
 
@@ -630,14 +639,30 @@ export function createApp() {
       function updateCountryFilter(incidents) {
         const select = byId("countryFilter");
         const existing = new Set(Array.from(select.options).map((o) => o.value));
-        const options = Array.from(new Set(incidents.map((i) => i.countryCode || i.country_code))).filter(Boolean).sort();
-        options.forEach((code) => {
-          if (existing.has(code)) {
-            return;
-          }
+        const countryMap = new Map();
+        incidents.forEach((i) => {
+          if (i.country_code) countryMap.set(i.country_code, i.country_name || i.country_code);
+        });
+        Array.from(countryMap.entries())
+          .sort((a, b) => a[1].localeCompare(b[1]))
+          .forEach(([code, name]) => {
+            if (existing.has(code)) return;
+            const option = document.createElement("option");
+            option.value = code;
+            option.textContent = name;
+            select.appendChild(option);
+          });
+      }
+
+      function updateCategoryFilter(incidents) {
+        const select = byId("categoryFilter");
+        const existing = new Set(Array.from(select.options).map((o) => o.value));
+        const categories = Array.from(new Set(incidents.map((i) => i.incident_category).filter(Boolean))).sort();
+        categories.forEach((cat) => {
+          if (existing.has(cat)) return;
           const option = document.createElement("option");
-          option.value = code;
-          option.textContent = code;
+          option.value = cat;
+          option.textContent = cat.replace(/_/g, " ");
           select.appendChild(option);
         });
       }
@@ -771,9 +796,12 @@ export function createApp() {
           const countryCode = byId("countryFilter").value;
           const verificationStatus = byId("statusFilter").value;
 
+          const category = byId("categoryFilter").value;
+
           const params = new URLSearchParams({ limit: "2000" });
           if (countryCode) params.set("countryCode", countryCode);
           if (verificationStatus) params.set("verificationStatus", verificationStatus);
+          if (category) params.set("category", category);
 
           const incidents = await getJson("/api/incidents?" + params.toString());
 
@@ -782,6 +810,7 @@ export function createApp() {
           state.byId = new Map(incidents.data.map((incident) => [incident.id, incident]));
 
           updateCountryFilter(incidents.data);
+          updateCategoryFilter(incidents.data);
           buildTimeline(incidents.data);
           state.windowDays = null;
           setActivePreset("all");
@@ -795,6 +824,7 @@ export function createApp() {
 
       byId("refresh").addEventListener("click", refresh);
       byId("countryFilter").addEventListener("change", refresh);
+      byId("categoryFilter").addEventListener("change", refresh);
       byId("statusFilter").addEventListener("change", refresh);
       byId("clusterToggle").addEventListener("change", rerenderFromTimeline);
       byId("heatToggle").addEventListener("change", rerenderFromTimeline);
