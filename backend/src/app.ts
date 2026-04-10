@@ -3,6 +3,7 @@ import express from "express";
 import { incidentsRouter } from "./routes/incidents.js";
 import { analyticsRouter } from "./routes/analytics.js";
 import { moderationRouter } from "./routes/moderation.js";
+import { sourcesRouter } from "./routes/sources.js";
 import { authContextMiddleware } from "./middleware/auth.js";
 
 export function createApp() {
@@ -361,7 +362,13 @@ export function createApp() {
 
         <section class="side">
           <section class="panel">
-            <div class="panel-h"><h2>Incidents Over Time</h2></div>
+            <div class="panel-h">
+              <h2>Incidents Over Time</h2>
+              <span style="font-size:0.73rem;color:var(--muted);display:flex;gap:10px;align-items:center;">
+                <span><svg width="14" height="6" style="vertical-align:middle"><line x1="0" y1="3" x2="14" y2="3" stroke="#0f766e" stroke-width="2.5" stroke-linecap="round"/></svg> incidents</span>
+                <span><svg width="14" height="8" style="vertical-align:middle"><rect x="0" y="0" width="14" height="8" fill="#fecdd3" rx="2" opacity="0.8"/></svg> fatalities</span>
+              </span>
+            </div>
             <div id="trend"></div>
           </section>
           <section class="panel">
@@ -395,7 +402,8 @@ export function createApp() {
         selectedIncidentId: null,
         timelineDays: [],
         playbackTimer: null,
-        windowDays: null
+        windowDays: null,
+        timeseries: []
       };
       let map;
       let markerLayer;
@@ -449,23 +457,51 @@ export function createApp() {
       function setDrawer(incident) {
         const root = byId("drawer");
         if (!incident) {
-          root.innerHTML = '<p>Select an incident from the map or feed.</p>';
+          root.innerHTML = '<p style="color:var(--muted);font-size:0.86rem;">Select an incident from the map or feed.</p>';
           return;
         }
 
-        root.innerHTML =
+        const confidence = Number(incident.confidence_level || 0);
+        const dots = confidence ? '●'.repeat(confidence) + '○'.repeat(5 - confidence) : '–';
+
+        let html =
           '<h3>' + esc(incident.title) + '</h3>' +
-          '<p>' + esc(incident.country_name || 'Unknown') + ' | ' + esc(incident.city_name || 'n/a') + '</p>' +
-          '<p>' + esc(incident.incident_category || 'uncategorized') + '</p>' +
-          '<p>' + esc(new Date(incident.occurred_at).toLocaleString()) + '</p>' +
+          '<p class="meta">' + esc(incident.country_name || 'Unknown') +
+            (incident.city_name ? ' · ' + esc(incident.city_name) : '') + '</p>' +
+          '<p class="meta">' + esc(incident.incident_category || 'uncategorized') +
+            (incident.attack_type ? ' · ' + esc(incident.attack_type) : '') + '</p>' +
+          '<p class="meta">' + esc(new Date(incident.occurred_at).toLocaleString()) + '</p>' +
           '<div class="row">' +
             '<div class="cell"><strong>Killed</strong><br />' + Number(incident.killed_count || 0) + '</div>' +
             '<div class="cell"><strong>Injured</strong><br />' + Number(incident.injured_count || 0) + '</div>' +
           '</div>' +
           '<div class="row">' +
             '<div class="cell"><strong>Status</strong><br />' + esc(incident.verification_status || 'pending') + '</div>' +
-            '<div class="cell"><strong>Coords</strong><br />' + Number(incident.latitude).toFixed(3) + ', ' + Number(incident.longitude).toFixed(3) + '</div>' +
+            '<div class="cell"><strong>Confidence</strong><br />' + dots + '</div>' +
           '</div>';
+
+        if (incident.suspected_group_name) {
+          html += '<p class="meta" style="margin-top:6px;">Group: <strong>' + esc(incident.suspected_group_name) + '</strong></p>';
+        }
+
+        if (incident.description) {
+          const desc = incident.description.length > 320
+            ? incident.description.slice(0, 320) + '\u2026'
+            : incident.description;
+          html += '<p style="margin-top:8px;font-size:0.83rem;line-height:1.5;">' + esc(desc) + '</p>';
+        }
+
+        if (incident.ai_summary) {
+          html += '<p style="margin-top:4px;font-size:0.81rem;color:var(--muted);font-style:italic;">' + esc(incident.ai_summary) + '</p>';
+        }
+
+        const sourceInfo = typeof incident.source_count === 'number'
+          ? incident.source_count + ' source' + (incident.source_count !== 1 ? 's' : '')
+          : '\u2013';
+        html += '<p class="meta" style="margin-top:8px;">' + sourceInfo + ' \u00b7 ' +
+          Number(incident.latitude).toFixed(3) + ', ' + Number(incident.longitude).toFixed(3) + '</p>';
+
+        root.innerHTML = html;
       }
 
       function updateMap(incidents) {
@@ -499,10 +535,7 @@ export function createApp() {
               "Killed: " + Number(incident.killed_count || 0) + " | Injured: " + Number(incident.injured_count || 0) + "<br/>" +
               "Status: " + esc(incident.verification_status)
           );
-          marker.on("click", () => {
-            state.selectedIncidentId = incident.id;
-            setDrawer(incident);
-          });
+          marker.on("click", () => { selectIncident(incident.id); });
 
           heatPoints.push([Number(incident.latitude), Number(incident.longitude), Math.max(0.1, Number(incident.killed_count || 0) + 0.3)]);
 
@@ -583,8 +616,7 @@ export function createApp() {
           el.style.cursor = 'pointer';
           el.addEventListener('click', () => {
             const incident = incidents[index];
-            state.selectedIncidentId = incident.id;
-            setDrawer(incident);
+            selectIncident(incident.id);
             map.panTo([incident.latitude, incident.longitude], { animate: true, duration: 0.8 });
           });
         });
@@ -593,38 +625,44 @@ export function createApp() {
       function renderTrend(timeseries) {
         const root = byId("trend");
         if (!timeseries.length) {
-          root.innerHTML = '<div class="status" style="padding:10px;">No timeseries data.</div>';
+          root.innerHTML = '<div class="status" style="padding:10px;">No trend data.</div>';
           return;
         }
 
-        const values = timeseries.map((d) => Number(d.incident_count || 0));
-        const maxValue = Math.max(...values, 1);
-        const width = 420;
-        const height = 130;
-        const step = width / Math.max(values.length - 1, 1);
-        const points = values
-          .map((value, index) => {
-            const x = index * step;
-            const y = height - (value / maxValue) * (height - 14) - 7;
-            return x + "," + y;
-          })
-          .join(" ");
+        const incCounts = timeseries.map((d) => Number(d.incident_count || 0));
+        const killedCounts = timeseries.map((d) => Number(d.total_killed || 0));
+        const maxInc = Math.max(...incCounts, 1);
+        const maxKilled = Math.max(...killedCounts, 1);
+        const W = 420, H = 130, PAD = 8;
+        const n = timeseries.length;
+        const step = W / Math.max(n - 1, 1);
+        const toY = (val, max) => (H - PAD - (val / max) * (H - PAD * 2)).toFixed(1);
+
+        const killedArea =
+          "M 0," + (H - PAD) + " " +
+          killedCounts.map((v, i) => "L " + (i * step).toFixed(1) + "," + toY(v, maxKilled)).join(" ") +
+          " L " + ((n - 1) * step).toFixed(1) + "," + (H - PAD) + " Z";
+
+        const incLine = incCounts.map((v, i) => (i * step).toFixed(1) + "," + toY(v, maxInc)).join(" ");
 
         root.innerHTML =
-          '<svg class="trend-svg" viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="none">' +
-          '<polyline points="' + points + '" fill="none" stroke="#0f766e" stroke-width="3" stroke-linecap="round" />' +
-          '</svg>';
+          '<svg class="trend-svg" viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none">' +
+          '<path d="' + killedArea + '" fill="#fecdd3" opacity="0.6" />' +
+          '<polyline points="' + incLine + '" fill="none" stroke="#0f766e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />' +
+          "</svg>";
       }
 
-      function summarizeTimeseries(incidents) {
-        const dayMap = new Map();
-        incidents.forEach((i) => {
-          const day = new Date(i.occurred_at).toISOString().slice(0, 10);
-          dayMap.set(day, (dayMap.get(day) || 0) + 1);
-        });
-        return Array.from(dayMap.entries())
-          .sort((a, b) => (a[0] < b[0] ? -1 : 1))
-          .map(([bucket, incident_count]) => ({ bucket, incident_count }));
+      async function selectIncident(id) {
+        state.selectedIncidentId = id;
+        const known = state.byId.get(id);
+        if (known) setDrawer(known);
+        try {
+          const detail = await getJson("/api/incidents/" + encodeURIComponent(id));
+          state.byId.set(id, detail.data);
+          if (state.selectedIncidentId === id) setDrawer(detail.data);
+        } catch (_e) {
+          // keep showing what we have
+        }
       }
 
       function renderStats(incidents, countries) {
@@ -742,14 +780,12 @@ export function createApp() {
       function rerenderFromTimeline() {
         const visibleIncidents = incidentsAtTimeline();
         const visibleCountries = summarizeCountries(visibleIncidents);
-        const visibleTimeseries = summarizeTimeseries(visibleIncidents);
         byId("timelineVisible").textContent = String(visibleIncidents.length);
 
         renderStats(visibleIncidents, visibleCountries);
         updateMap(visibleIncidents);
         renderFeed(visibleIncidents);
         renderCountries(visibleCountries);
-        renderTrend(visibleTimeseries);
         fitMapToIncidents(visibleIncidents);
 
         if (!state.selectedIncidentId && visibleIncidents.length) {
@@ -803,9 +839,18 @@ export function createApp() {
           if (verificationStatus) params.set("verificationStatus", verificationStatus);
           if (category) params.set("category", category);
 
-          const incidents = await getJson("/api/incidents?" + params.toString());
+          const analyticsParams = new URLSearchParams();
+          if (countryCode) analyticsParams.set("countryCode", countryCode);
+          if (verificationStatus) analyticsParams.set("verificationStatus", verificationStatus);
+          if (category) analyticsParams.set("category", category);
+
+          const [incidents, analyticsData] = await Promise.all([
+            getJson("/api/incidents?" + params.toString()),
+            getJson("/api/analytics/timeseries?" + analyticsParams.toString()).catch(() => ({ data: [] }))
+          ]);
 
           state.incidents = incidents.data;
+          state.timeseries = analyticsData.data;
           state.countries = summarizeCountries(incidents.data);
           state.byId = new Map(incidents.data.map((incident) => [incident.id, incident]));
 
@@ -815,6 +860,7 @@ export function createApp() {
           state.windowDays = null;
           setActivePreset("all");
           rerenderFromTimeline();
+          renderTrend(state.timeseries);
 
           status.textContent = "Live.";
         } catch (error) {
@@ -869,6 +915,7 @@ export function createApp() {
   app.use("/api/incidents", incidentsRouter);
   app.use("/api/analytics", analyticsRouter);
   app.use("/api/moderation", moderationRouter);
+  app.use("/api/sources", sourcesRouter);
 
   app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     const message = err instanceof Error ? err.message : "Unexpected server error";

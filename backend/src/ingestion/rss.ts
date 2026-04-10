@@ -19,14 +19,45 @@ type FeedIngestResult = {
 };
 
 const COUNTRY_HINTS: Array<{ code: string; name: string; keywords: string[]; center: [number, number] }> = [
-  { code: "NG", name: "Nigeria", keywords: ["nigeria", "maiduguri", "borno", "abuja", "lagos"], center: [8.6753, 9.082] },
-  { code: "IQ", name: "Iraq", keywords: ["iraq", "baghdad", "mosul", "basra"], center: [43.6793, 33.2232] },
-  { code: "SO", name: "Somalia", keywords: ["somalia", "mogadishu"], center: [46.1996, 5.1521] },
-  { code: "SY", name: "Syria", keywords: ["syria", "aleppo", "damascus", "idlib"], center: [38.9968, 34.8021] },
-  { code: "AF", name: "Afghanistan", keywords: ["afghanistan", "kabul", "kandahar"], center: [67.7099, 33.9391] },
-  { code: "UA", name: "Ukraine", keywords: ["ukraine", "kyiv", "kharkiv", "odesa"], center: [31.1656, 48.3794] },
-  { code: "SD", name: "Sudan", keywords: ["sudan", "khartoum", "darfur"], center: [30.2176, 12.8628] },
-  { code: "CD", name: "DR Congo", keywords: ["congo", "goma", "kinshasa", "kivu"], center: [21.7587, -4.0383] }
+  // Africa
+  { code: "NG", name: "Nigeria", keywords: ["nigeria", "maiduguri", "borno", "abuja", "lagos", "kano", "zamfara"], center: [8.6753, 9.082] },
+  { code: "SO", name: "Somalia", keywords: ["somalia", "mogadishu", "al-shabaab", "al shabaab", "puntland", "jubbaland"], center: [46.1996, 5.1521] },
+  { code: "SD", name: "Sudan", keywords: ["sudan", "khartoum", "darfur", "rsf", "rapid support forces", "el fasher"], center: [30.2176, 12.8628] },
+  { code: "SS", name: "South Sudan", keywords: ["south sudan", "juba", "bentiu", "malakal"], center: [31.307, 6.877] },
+  { code: "ET", name: "Ethiopia", keywords: ["ethiopia", "tigray", "addis ababa", "amhara", "oromia", "afar", "tplf"], center: [40.489, 9.145] },
+  { code: "ML", name: "Mali", keywords: ["mali", "bamako", "timbuktu", "gao", "mopti", "kidal"], center: [-3.996, 17.570] },
+  { code: "BF", name: "Burkina Faso", keywords: ["burkina faso", "ouagadougou", "burkina", "jnim"], center: [-1.561, 12.364] },
+  { code: "NE", name: "Niger", keywords: ["niger", "niamey", "diffa", "agadez"], center: [8.082, 17.607] },
+  { code: "CM", name: "Cameroon", keywords: ["cameroon", "yaounde", "douala", "anglophone cameroon", "ambazonia"], center: [12.354, 5.396] },
+  { code: "CF", name: "Central African Republic", keywords: ["central african republic", "bangui", "car rebels", "seleka"], center: [20.940, 6.612] },
+  { code: "CD", name: "DR Congo", keywords: ["congo", "democratic republic of congo", "drc", "goma", "kinshasa", "kivu", "m23", "ituri"], center: [21.7587, -4.0383] },
+  { code: "LY", name: "Libya", keywords: ["libya", "tripoli", "benghazi", "sirte", "misrata"], center: [17.228, 26.335] },
+  { code: "EG", name: "Egypt", keywords: ["egypt", "cairo", "sinai", "alexandria", "north sinai"], center: [30.802, 26.820] },
+  { code: "MZ", name: "Mozambique", keywords: ["mozambique", "cabo delgado", "mocimboa", "pemba", "ansar al-sunna"], center: [35.730, -17.269] },
+  { code: "KE", name: "Kenya", keywords: ["kenya", "nairobi", "mombasa", "garissa", "lamu"], center: [37.906, 0.023] },
+  { code: "ZW", name: "Zimbabwe", keywords: ["zimbabwe", "harare", "bulawayo"], center: [29.919, -20.013] },
+  // Middle East
+  { code: "IQ", name: "Iraq", keywords: ["iraq", "baghdad", "mosul", "basra", "kirkuk", "anbar", "isis iraq"], center: [43.6793, 33.2232] },
+  { code: "SY", name: "Syria", keywords: ["syria", "aleppo", "damascus", "idlib", "deir ez-zor", "hama", "homs"], center: [38.9968, 34.8021] },
+  { code: "YE", name: "Yemen", keywords: ["yemen", "sanaa", "aden", "hodeidah", "houthi", "taiz", "marib"], center: [47.586, 15.553] },
+  { code: "PS", name: "Palestine", keywords: ["gaza", "west bank", "palestine", "ramallah", "rafah", "khan younis", "hamas", "jenin"], center: [35.234, 31.952] },
+  { code: "LB", name: "Lebanon", keywords: ["lebanon", "beirut", "hezbollah", "south lebanon", "tripoli lebanon"], center: [35.862, 33.854] },
+  { code: "IR", name: "Iran", keywords: ["iran", "tehran", "irgc", "revolutionary guard", "isfahan", "mashhad"], center: [53.688, 32.427] },
+  // South/Central Asia
+  { code: "AF", name: "Afghanistan", keywords: ["afghanistan", "kabul", "kandahar", "taliban", "helmand", "nangarhar", "kunduz"], center: [67.7099, 33.9391] },
+  { code: "PK", name: "Pakistan", keywords: ["pakistan", "karachi", "lahore", "islamabad", "peshawar", "balochistan", "khyber", "ttp"], center: [69.345, 30.376] },
+  // East Asia / Southeast Asia
+  { code: "MM", name: "Myanmar", keywords: ["myanmar", "burma", "yangon", "mandalay", "rakhine", "shan state", "chin state", "pdf myanmar"], center: [95.956, 21.914] },
+  { code: "PH", name: "Philippines", keywords: ["philippines", "mindanao", "manila", "marawi", "maguindanao", "abu sayyaf"], center: [121.774, 12.880] },
+  // Europe / Eurasia
+  { code: "UA", name: "Ukraine", keywords: ["ukraine", "kyiv", "kharkiv", "odesa", "zaporizhzhia", "kherson", "donbas", "mariupol"], center: [31.1656, 48.3794] },
+  { code: "RU", name: "Russia", keywords: ["russia", "moscow", "chechnya", "dagestan", "north caucasus", "belgorod"], center: [105.319, 61.524] },
+  { code: "TR", name: "Turkey", keywords: ["turkey", "ankara", "istanbul", "pkk", "kurdish turkey", "diyarbakir"], center: [35.243, 38.964] },
+  // Latin America
+  { code: "MX", name: "Mexico", keywords: ["mexico", "sinaloa", "jalisco", "cartel", "guerrero", "michoacan", "tamaulipas", "culiacan"], center: [-102.553, 23.635] },
+  { code: "CO", name: "Colombia", keywords: ["colombia", "bogota", "medellin", "farc", "eln", "cali", "antioquia"], center: [-74.297, 4.571] },
+  { code: "HT", name: "Haiti", keywords: ["haiti", "port-au-prince", "gang haiti", "cite soleil", "g9 gang"], center: [-72.285, 18.972] },
+  { code: "VE", name: "Venezuela", keywords: ["venezuela", "caracas", "maduro", "aragua"], center: [-66.590, 6.424] }
 ];
 
 const CATEGORY_KEYWORDS: Array<{ category: string; attackType: string; targetType: string; keywords: string[] }> = [
