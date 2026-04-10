@@ -20,6 +20,8 @@ const mergeBodySchema = z.object({
   reason: z.string().trim().min(1).max(1000).optional()
 });
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 function requireAdmin(req: Request, res: Response): boolean {
   const role = req.user?.role;
   if (role !== "admin" && role !== "moderator") {
@@ -110,6 +112,9 @@ moderationRouter.get("/queue", async (req, res, next) => {
 });
 
 moderationRouter.post("/incidents/:id/verify", async (req, res, next) => {
+  if (!UUID_RE.test(req.params.id)) {
+    return res.status(400).json({ error: "Invalid incident id" });
+  }
   try {
     if (!requireAdmin(req, res)) {
       return;
@@ -125,6 +130,18 @@ moderationRouter.post("/incidents/:id/verify", async (req, res, next) => {
       return;
     }
     const { reason } = parsedBody.data;
+
+    const current = await pool.query(
+      "SELECT verification_status FROM incidents WHERE id = $1",
+      [req.params.id]
+    );
+    if (current.rowCount === 0) {
+      return res.status(404).json({ error: "Incident not found" });
+    }
+    const previousStatus = (current.rows[0] as { verification_status: string }).verification_status;
+    if (previousStatus === "verified") {
+      return res.status(409).json({ error: "Incident is already verified" });
+    }
 
     const update = await pool.query(
       `
@@ -136,10 +153,6 @@ moderationRouter.post("/incidents/:id/verify", async (req, res, next) => {
       [req.params.id]
     );
 
-    if (update.rowCount === 0) {
-      return res.status(404).json({ error: "Incident not found" });
-    }
-
     await pool.query(
       `
       INSERT INTO moderation_actions (id, moderator_id, target_type, target_id, action_type, reason, metadata)
@@ -150,7 +163,7 @@ moderationRouter.post("/incidents/:id/verify", async (req, res, next) => {
         moderatorId,
         req.params.id,
         reason ?? null,
-        JSON.stringify({ previous_status: "pending", new_status: "verified" })
+        JSON.stringify({ previous_status: previousStatus, new_status: "verified" })
       ]
     );
 
@@ -161,6 +174,9 @@ moderationRouter.post("/incidents/:id/verify", async (req, res, next) => {
 });
 
 moderationRouter.post("/incidents/:id/reject", async (req, res, next) => {
+  if (!UUID_RE.test(req.params.id)) {
+    return res.status(400).json({ error: "Invalid incident id" });
+  }
   try {
     if (!requireAdmin(req, res)) {
       return;
@@ -177,6 +193,18 @@ moderationRouter.post("/incidents/:id/reject", async (req, res, next) => {
     }
     const { reason } = parsedBody.data;
 
+    const current = await pool.query(
+      "SELECT verification_status FROM incidents WHERE id = $1",
+      [req.params.id]
+    );
+    if (current.rowCount === 0) {
+      return res.status(404).json({ error: "Incident not found" });
+    }
+    const previousStatus = (current.rows[0] as { verification_status: string }).verification_status;
+    if (previousStatus === "rejected") {
+      return res.status(409).json({ error: "Incident is already rejected" });
+    }
+
     const update = await pool.query(
       `
       UPDATE incidents
@@ -186,10 +214,6 @@ moderationRouter.post("/incidents/:id/reject", async (req, res, next) => {
       `,
       [req.params.id]
     );
-
-    if (update.rowCount === 0) {
-      return res.status(404).json({ error: "Incident not found" });
-    }
 
     await pool.query(
       `
@@ -201,7 +225,7 @@ moderationRouter.post("/incidents/:id/reject", async (req, res, next) => {
         moderatorId,
         req.params.id,
         reason ?? null,
-        JSON.stringify({ previous_status: "pending", new_status: "rejected" })
+        JSON.stringify({ previous_status: previousStatus, new_status: "rejected" })
       ]
     );
 
