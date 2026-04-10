@@ -40,7 +40,7 @@ Target users:
 
 ## Hero Experience
 
-The homepage opens directly to a full-screen dark-mode world map.
+The homepage opens directly to a full-screen white-mode world map.
 
 Features:
 - Clustered incident points
