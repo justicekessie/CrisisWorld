@@ -14,13 +14,14 @@
     "import:csv": "tsx src/scripts/importCsv.ts"
   },
   "dependencies": {
-    "csv-parse": "^5.5.6",
     "cors": "^2.8.5",
+    "csv-parse": "^5.5.6",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "fast-xml-parser": "^4.5.0",
     "i18n-iso-countries": "^7.11.0",
     "pg": "^8.12.0",
+    "xlsx": "^0.18.5",
     "zod": "^3.23.8"
   },
   "devDependencies": {

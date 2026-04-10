@@ -36,7 +36,7 @@ npm run dev
 - Query params for /api/analytics/timeseries: countryCode, dateFrom, dateTo
 - Query params for /api/moderation/queue: status, limit, cursorOccurredAt, cursorId
 - `ingest:rss` writes normalized source entries to `sources` and links/incubates incidents in `incidents`
-- `import:csv` loads incidents from `../-338405971 - -338405971.csv` by default (override with `CSV_IMPORT_PATH`)
+- `import:csv` loads incidents from `../-338405971 - -338405971.csv` by default and also supports `.xlsx` DSAT files (override with `CSV_IMPORT_PATH`)
 - Moderation endpoints require headers: `x-user-role: moderator|admin` and `x-user-id: <uuid>`
 - Verify/reject request body: `{ "reason": "optional note" }`
 - Merge request body: `{ "sourceIncidentId": "<uuid>", "targetIncidentId": "<uuid>", "reason": "optional note" }`
